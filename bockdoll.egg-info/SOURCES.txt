@@ -1,0 +1,9 @@
+README.md
+setup.py
+bockdoll/__init__.py
+bockdoll/encoder.py
+bockdoll/folder.py
+bockdoll.egg-info/PKG-INFO
+bockdoll.egg-info/SOURCES.txt
+bockdoll.egg-info/dependency_links.txt
+bockdoll.egg-info/top_level.txt
