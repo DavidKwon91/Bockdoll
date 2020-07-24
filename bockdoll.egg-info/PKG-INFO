@@ -2,9 +2,19 @@ Metadata-Version: 1.0
 Name: bockdoll
 Version: 1.0.0
 Summary: Some utilities to be used
-Home-page: UNKNOWN
+Home-page: https://github.com/DavidKwon91/Utils.git
 Author: David Kwon
 Author-email: husiew140@gmail.com
 License: UNKNOWN
-Description: UNKNOWN
+Description: Utils to be used
+        
+        list
+        
+        - BockdollEndoing\
+          Categorical Encoding based on target
+        
+        - Startified Group K Fold\
+          Group K Fold, with stratified startegy\
+          Reference link : [links](https://www.kaggle.com/jakubwasikowski/stratified-group-k-fold-cross-validation)
+        
 Platform: UNKNOWN

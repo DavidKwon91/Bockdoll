@@ -16,6 +16,6 @@ setuptools.setup(
     author_email="husiew140@gmail.com",
     description="Some utilities to be used",
     long_description=long_description,
-    url="https://github.com/DavidKwon91/Utils.git",
+    url="https://github.com/DavidKwon91/Bockdoll.git",
     packages=setuptools.find_packages(),
 )
