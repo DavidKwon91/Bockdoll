@@ -1,29 +1,9 @@
 import numpy as np
-import pandas as pd
-
-from sklearn.model_selection import KFold, StratifiedKFold, GroupKFold
-
-from folder import stratified_group_k_fold
-
-
-def fold_split(x, y, fold, group=None):
-    # fold e.g) StratifiedKFold(n_splits = 5, random_state = 2020, shuffle = True)
-    # fold e.g) GroupKFold(n_splits = 5, random_state = 2020, shuffle = True)
-
-    if fold.__class__ in (GroupKFold, stratified_group_k_fold):
-        if group is None:
-            raise ValueError("Specify groups for group k-fold")
-        else:
-            fold_split = fold.split(x, y, groups=group)
-    else:
-        fold_split = fold.split(x, y)
-
-    return fold_split
 
 
 class BockdollEncoding:
     """
-    Encoder for cateogrical variables (features), and this is only for binary task. 
+    Encoder for cateogrical variables (features), except for one hot encoding
 
     :::Encoding types:::
     
@@ -146,54 +126,37 @@ class BockdollEncoding:
             self.log = np.log
 
     @staticmethod
-    def _clip(x):
+    def clip(x):
         return np.clip(x, 1e-4, 0.99)
 
-    def _smoothingProb(self, n, p, y):
+    def smoothingProb(self, n, p, y):
         smoove = 1 / (1 + np.exp(-(n - self.min_sample) / self.smoothing))
         smooth = y.mean() * (1 - smoove) + p * smoove
         return smooth
 
-    def _logodds(self, p):
+    def logodds(self, p):
         return self.log(p / (1 - p))
 
-    def _gini_imp(self, p):
+    def gini_imp(self, p):
         return 1 - p ** 2 - (1 - p) ** 2
 
-    def _entropy(self, p):
+    def entropy(self, p):
         return -p * self.log(p) - (1 - p) * self.log(1 - p)
 
-    def _focal_loss(self, p):
+    def focal_loss(self, p):
         return -(
             self.alpha * self.log(p) * np.power((1.0 - p), self.gamma)
             + (1.0 - self.alpha) * self.log(1.0 - p) * np.power(p, self.gamma)
         )
 
-    def _entropy_geom(self, p):
+    def entropy_geom(self, p):
         return (-p * self.log(p) - (1 - p) * self.log(1 - p)) / p
 
-    def _beta_bias(self, p, n):  # https://en.wikipedia.org/wiki/Geometric_distribution
+    def beta_bias(self, p, n):  # https://en.wikipedia.org/wiki/Geometric_distribution
         bias = p * (1 - p) / n
         return p - bias
 
     def fit(self, X, y, type_enc="prob0"):
-        """
-        Fitting
-
-        X : must be pd.DataFrame or pd.Series object
-        y : 1-D array or Series
-        type_enc : type for encoding
-        
-        """
-
-        if type(X) in (type(pd.Series(0)), type(pd.DataFrame([]))):
-            if type(X) == type(pd.Series(0)):
-                X = pd.DataFrame(X)
-        else:
-            raise ValueError(
-                "X input must be pd.Series or pd.DataFrame with proper column name and index"
-            )
-
         if type_enc not in self.type_fit:
             raise ValueError(
                 type_enc
@@ -236,7 +199,7 @@ class BockdollEncoding:
                 smooth_mean = (
                     X.assign(target=self.y)
                     .groupby(cols)["target"]
-                    .agg(lambda x: self._smoothingProb(x.count(), x.mean(), self.y))
+                    .agg(lambda x: self.smoothingProb(x.count(), x.mean(), self.y))
                 )
                 mapping[cols] = smooth_mean
             self.prior = self.y.mean()
@@ -248,7 +211,7 @@ class BockdollEncoding:
                 smooth_mean = (
                     X.assign(target=self.y)
                     .groupby(cols)["target"]
-                    .agg(lambda x: self._smoothingProb(x.count(), x.mean(), self.y))
+                    .agg(lambda x: self.smoothingProb(x.count(), x.mean(), self.y))
                 )
                 mapping[cols] = smooth_mean
             self.prior = self.y.mean()
@@ -262,7 +225,7 @@ class BockdollEncoding:
                     X.assign(target=self.y)
                     .groupby(cols)["target"]
                     .agg(
-                        smooth_mean=lambda x: self._smoothingProb(
+                        smooth_mean=lambda x: self.smoothingProb(
                             x.count(), x.mean(), self.y
                         ),
                         count=lambda x: x.count(),
@@ -284,7 +247,7 @@ class BockdollEncoding:
                     X.assign(target=self.y)
                     .groupby(cols)["target"]
                     .agg(
-                        smooth_mean=lambda x: self._smoothingProb(
+                        smooth_mean=lambda x: self.smoothingProb(
                             x.count(), x.mean(), self.y
                         ),
                         count=lambda x: x.count(),
@@ -365,17 +328,6 @@ class BockdollEncoding:
         self.mapping = mapping
 
     def transform(self, X_in, type_enc="prob"):
-        """
-        Mapping after fitting
-        """
-        if type(X_in) in (type(pd.Series(0)), type(pd.DataFrame([]))):
-            if type(X_in) == type(pd.Series(0)):
-                X_in = pd.DataFrame(X_in)
-        else:
-            raise ValueError(
-                "X input must be pd.Series or pd.DataFrame with proper column name and index"
-            )
-
         if type_enc not in self.type_trans:
             raise ValueError(
                 type_enc
@@ -398,37 +350,35 @@ class BockdollEncoding:
         if type_enc == "logit":
             for cols in X.columns:
                 X[cols] = X[cols].map(
-                    self.mapping[cols].apply(lambda x: self._logodds(self._clip(x)))
+                    self.mapping[cols].apply(lambda x: self.logodds(self.clip(x)))
                 )
             return X.fillna(X.mean())
 
         if type_enc == "gini imp":
             for cols in X.columns:
                 X[cols] = X[cols].map(
-                    self.mapping[cols].apply(lambda x: self._gini_imp(self._clip(x)))
+                    self.mapping[cols].apply(lambda x: self.gini_imp(x))
                 )
             return X.fillna(X.mean())
 
         if type_enc == "entropy":
             for cols in X.columns:
                 X[cols] = X[cols].map(
-                    self.mapping[cols].apply(lambda x: self._entropy(self._clip(x)))
+                    self.mapping[cols].apply(lambda x: self.entropy(self.clip(x)))
                 )
             return X.fillna(X.mean())
 
         if type_enc == "focal loss":
             for cols in X.columns:
                 X[cols] = X[cols].map(
-                    self.mapping[cols].apply(lambda x: self._focal_loss(self._clip(x)))
+                    self.mapping[cols].apply(lambda x: self.focal_loss(self.clip(x)))
                 )
             return X.fillna(X.mean())
 
         if type_enc == "entropy geom":
             for cols in X.columns:
                 X[cols] = X[cols].map(
-                    self.mapping[cols].apply(
-                        lambda x: self._entropy_geom(self._clip(x))
-                    )
+                    self.mapping[cols].apply(lambda x: self.entropy_geom(self.clip(x)))
                 )
             return X.fillna(X.mean())
 
@@ -444,75 +394,3 @@ class BockdollEncoding:
                 X[cols] = X[cols].map(self.mapping[cols])
 
             return X.fillna(X.mean())
-
-    def fold_encode(
-        self, X_in, y, fold, group=None, type_enc_fit="prob0", type_enc_trans="prob"
-    ):
-        """
-        K-fold encoding for preventing overfitting
-
-        Parameters
-        ------------
-        x : X_train, features
-        y : y_train, target (binary)
-        
-        fold : initiated K-fold class
-        groups : groups for group K-fold
-
-        Returns
-        ------------
-        K-fold target encoded X_train, y_train
-
-            e.g) enc = BockdollEncoding()
-
-                 fold = sklearn.model_selection.KFold(n_splits = 5)
-                 fold = sklearn.model_selection.StratifiedKFold(n_splits = 5)        
-                 fold = sklearn.model_selection.GroupKFold(n_splits)
-
-                 enc.fold_encode(x, y, fold)
-        """
-
-        if type(X_in) in (type(pd.Series(0)), type(pd.DataFrame([]))):
-            if type(X_in) == type(pd.Series(0)):
-                X_in = pd.DataFrame(X_in)
-        else:
-            raise ValueError(
-                "X input must be pd.Series or pd.DataFrame with proper column name and index"
-            )
-
-        if type_enc_fit not in self.type_fit:
-            raise ValueError(
-                type_enc
-                + ", this encoding type is not available, please use one of the encoding in the list, "
-                + str(self.type_fit)
-            )
-
-        if type_enc_trans not in self.type_trans:
-            raise ValueError(
-                type_enc
-                + ", this encoding type is not available, please use one of the encoding in the list, "
-                + str(self.type_trans)
-            )
-
-        X_train = X_in.copy(deep=True)
-        y_train = y.copy(deep=True)
-
-        if group is not None:
-            group = group.copy(deep=True)
-
-        splitted_fold = fold_split(X_train, y_train, fold, group=group)
-
-        oof = pd.DataFrame([])
-
-        for tr_ind, oof_ind in splitted_fold:
-            fold_df, oof_df = X_train.iloc[tr_ind], X_train.iloc[oof_ind]
-            fold_y, oof_y = y_train.iloc[tr_ind], y_train.iloc[oof_ind]
-
-            self.fit(fold_df, fold_y, type_enc=type_enc_fit)
-            oof = oof.append(
-                self.transform(oof_df, type_enc=type_enc_trans), ignore_index=False
-            )
-        X_train = oof.sort_index()
-        y_train = y_train.sort_index()
-
-        return X_train, y_train
